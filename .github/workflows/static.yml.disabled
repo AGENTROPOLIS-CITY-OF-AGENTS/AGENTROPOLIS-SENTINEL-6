@@ -1,0 +1,16 @@
+# Disabled legacy GitHub Pages workflow
+#
+# This file intentionally replaces the previous `static.yml` deployment workflow.
+# The legacy workflow uploaded the entire repository root (`path: '.'`) to GitHub Pages,
+# while the canonical Sentinel-6 public site lives under `site/`.
+#
+# Canonical deployment workflow:
+#   .github/workflows/pages.yml
+# Canonical publish path:
+#   ./site
+#
+# Do not re-enable a second Pages deploy workflow. Multiple workflows targeting the same
+# `github-pages` environment can overwrite one another and can produce a root 404 when
+# the repository root does not contain the intended `index.html`.
+#
+# Follow-up UI rebuild is tracked separately under the Creator Construction 3D UI/UX mandate.
