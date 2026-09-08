@@ -1,0 +1,195 @@
+monitor: greenrails-settlement
+version: "0.1.0"
+status: declarative-draft
+enforcement: not-implemented
+tier: T5
+owner: SENTINEL-6
+policy_authority: AEGIS-ASSURANCE/policies/greenrails-settlement-gates.yaml
+mock_banner: "MOCK SETTLEMENT · NO FUNDS WILL MOVE"
+
+principle: "SENTINEL verifies what actually happened; it never grants authority or relaxes posture."
+
+independence:
+  reads_settlement_ledger: true
+  reads_chain_state: true
+  writes_settlement_state: false
+  can_grant_release: false
+  can_halt_new_reservations: true
+  aegis_cannot_suppress_findings: true
+
+states:
+  success_path:
+    - QUOTED
+    - USDC_RESERVED
+    - INPUT_AUTHORIZED
+    - XENTS_ROUTED
+    - NFT_TRANSFER_PENDING
+    - NFT_TRANSFER_CONFIRMED
+    - USDC_RELEASED
+    - RECEIPT_FINALIZED
+  terminal:
+    - QUOTE_EXPIRED
+    - INPUT_FAILED
+    - INSUFFICIENT_LIQUIDITY
+    - NFT_OWNERSHIP_CHANGED
+    - NFT_TRANSFER_FAILED
+    - CHAIN_CONFIRMATION_TIMEOUT
+    - USDC_PAYOUT_FAILED
+    - REFUNDED
+    - MANUAL_REVIEW
+  transitional_failure:
+    - REFUND_PENDING
+
+stuck_in_state:
+  - state: QUOTED
+    max_seconds: 300
+    expected_exit: QUOTE_EXPIRED
+    severity: low
+  - state: USDC_RESERVED
+    max_seconds: 900
+    escalate_to: REFUND_PENDING
+    severity: medium
+  - state: INPUT_AUTHORIZED
+    max_seconds: 600
+    escalate_to: MANUAL_REVIEW
+    severity: high
+  - state: XENTS_ROUTED
+    max_seconds: 600
+    escalate_to: MANUAL_REVIEW
+    severity: high
+  - state: NFT_TRANSFER_PENDING
+    max_seconds: 1800
+    escalate_to: CHAIN_CONFIRMATION_TIMEOUT
+    severity: high
+  - state: NFT_TRANSFER_CONFIRMED
+    max_seconds: 600
+    escalate_to: MANUAL_REVIEW
+    severity: critical
+    note: NFT moved but USDC not released; seller unpaid
+  - state: USDC_RELEASED
+    max_seconds: 300
+    escalate_to: MANUAL_REVIEW
+    severity: high
+  - state: REFUND_PENDING
+    max_seconds: 3600
+    escalate_to: MANUAL_REVIEW
+    severity: high
+  - state: MANUAL_REVIEW
+    max_seconds: 86400
+    action: page_named_human
+    severity: critical
+
+invariants:
+  - id: GR-INV-001
+    statement: no settlement reaches INPUT_AUTHORIZED without a USDC_RESERVED receipt for the same quote_id
+    severity: critical
+    on_violation: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-INV-002
+    statement: no settlement reaches RECEIPT_FINALIZED without both NFT_TRANSFER_CONFIRMED and USDC_RELEASED evidence hashes
+    severity: critical
+    on_violation: MANUAL_REVIEW
+  - id: GR-INV-003
+    statement: seller_payout_address in USDC_RELEASED equals seller_payout_address in mandate
+    severity: critical
+    on_violation: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-INV-004
+    statement: usdc released equals usdc reserved equals mandate usdc_payout_amount
+    severity: critical
+    on_violation: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-INV-005
+    statement: Legacy NFT contract never receives burn, bridge, or wrap calls from settlement actors
+    severity: critical
+    on_violation: MANUAL_REVIEW
+  - id: GR-INV-006
+    statement: state transitions follow the canonical order; no skipped success-path state
+    severity: high
+    on_violation: MANUAL_REVIEW
+  - id: GR-INV-007
+    statement: every receipt carries domain agentropolis.greenrails.receipt.mock.v1 while live_funds_enabled is false
+    severity: critical
+    on_violation: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-INV-008
+    statement: rendered settlement surfaces contain the byte-exact mock banner
+    severity: critical
+    on_violation: MANUAL_REVIEW
+
+anomaly_rules:
+  - id: GR-ANOM-001
+    name: reserve_ledger_drift
+    metric: abs(sum(open_reservations.usdc) - reserve_ledger.reserved_balance)
+    window_seconds: 60
+    threshold: "0"
+    severity: critical
+    action: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-ANOM-002
+    name: refund_ratio_spike
+    metric: count(REFUNDED) / count(RECEIPT_FINALIZED + REFUNDED)
+    window_seconds: 3600
+    threshold: "0.20"
+    min_samples: 10
+    severity: high
+    action: alert_and_require_human_ack
+  - id: GR-ANOM-003
+    name: receipt_signature_failures
+    metric: count(receipt.verify == fail)
+    window_seconds: 300
+    threshold: "1"
+    severity: critical
+    action: halt_new_reservations_and_MANUAL_REVIEW
+  - id: GR-ANOM-004
+    name: quote_expiry_spike
+    metric: count(QUOTE_EXPIRED) / count(QUOTED)
+    window_seconds: 3600
+    threshold: "0.50"
+    min_samples: 20
+    severity: medium
+    action: alert
+  - id: GR-ANOM-005
+    name: ownership_change_spike
+    metric: count(NFT_OWNERSHIP_CHANGED)
+    window_seconds: 3600
+    threshold: "3"
+    severity: high
+    action: alert_and_require_human_ack
+  - id: GR-ANOM-006
+    name: oracle_deviation
+    metric: max_deviation_bps(price_sources)
+    window_seconds: 60
+    threshold: "100"
+    severity: high
+    action: block_new_quotes_and_alert
+  - id: GR-ANOM-007
+    name: manual_review_backlog
+    metric: count(state == MANUAL_REVIEW)
+    window_seconds: 0
+    threshold: "10"
+    severity: high
+    action: page_named_human
+  - id: GR-ANOM-008
+    name: velocity_per_actor
+    metric: max(count(QUOTED) group by buyer_id)
+    window_seconds: 3600
+    threshold: "20"
+    severity: medium
+    action: block_actor_new_quotes_and_alert
+  - id: GR-ANOM-009
+    name: live_flag_observed
+    metric: count(config.LIVE_FUNDS_ENABLED == true or config.MINT_LIVE == true)
+    window_seconds: 0
+    threshold: "0"
+    severity: critical
+    action: halt_all_and_page_named_human
+    note: launch gates in AEGIS policy are all open; any live flag is a violation
+
+receipt_verification:
+  procedure: docs/GREENRAILS-RECEIPT-VERIFICATION.md
+  implementation: src/receipts/greenrails.ts
+  domain_allowlist:
+    - agentropolis.greenrails.receipt.mock.v1
+  live_domain: undefined_until_launch_gates_closed
+
+reporting:
+  findings_schema: schemas/finding.schema.json
+  receipts_schema: schemas/receipt.schema.json
+  human_authority: mission-control
+  automatic_relaxation: false
