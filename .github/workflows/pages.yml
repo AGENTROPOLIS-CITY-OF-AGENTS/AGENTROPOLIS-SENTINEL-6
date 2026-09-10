@@ -27,10 +27,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify Pages entrypoint
+        run: test -f site/index.html
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload static site
+      - name: Upload Sentinel-6 site only
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
