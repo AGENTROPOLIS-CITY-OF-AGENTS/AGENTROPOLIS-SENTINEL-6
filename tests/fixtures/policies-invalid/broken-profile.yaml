@@ -1,0 +1,13 @@
+# Deliberately invalid fixture: must be REJECTED by the SENTINEL-6 policy validator.
+version: "1.0"
+profile_id: "not-a-sentinel-id"
+threat_class: "EXAMPLE"
+objective: ""
+attack_mutations:
+  - id: "dup"
+    action: "a"
+  - id: "dup"
+    action: "b"
+sentinel_roles: {}
+assertions: []
+failure_severity: "catastrophic"

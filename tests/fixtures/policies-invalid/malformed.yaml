@@ -1,0 +1,5 @@
+# Deliberately invalid fixture: duplicate keys / unparsable YAML.
+policy: duplicated
+policy: duplicated-again
+version: "1"
+rules: [

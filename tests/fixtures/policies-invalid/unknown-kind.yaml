@@ -1,0 +1,3 @@
+# Deliberately invalid fixture: neither a governance policy nor an adversary profile.
+name: mystery
+enabled: true
