@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm install
-      - run: npm run check
-      - run: node dist/src/cli.js doctor
+      - name: Install dependencies (deterministic, lockfile-enforced)
+        run: npm ci --no-audit --no-fund
+      - name: Run SENTINEL checks
+        run: npm run check
+      - name: Run SENTINEL doctor
+        run: node dist/src/cli.js doctor
+      - name: Validate SENTINEL policies
+        run: node dist/src/cli.js validate policies
+      - name: Assert validators executed (non-zero checks, zero failures)
+        run: node scripts/assert-validator-ran.mjs

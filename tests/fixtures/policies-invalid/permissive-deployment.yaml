@@ -1,0 +1,8 @@
+# Deliberately invalid fixture: must be REJECTED by the SENTINEL-6 policy validator.
+policy: weakened-deployment
+version: "0.0.1"
+default: allow
+allowed:
+  - production_deployment
+requires_explicit_human_mandate:
+  - production_deployment
