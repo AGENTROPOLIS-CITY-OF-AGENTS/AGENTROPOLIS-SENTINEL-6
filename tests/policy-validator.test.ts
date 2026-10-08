@@ -95,6 +95,10 @@ test("empty or missing policy directory fails closed (zero checks is never a pas
   const empty = validatePolicyDirectory(emptyDir);
   assert.equal(empty.passed, false);
   assert.equal(empty.filesChecked, 0);
+  // The report itself must carry the violation; `passed: false` alone can come from the
+  // summary guard while the per-check guard is broken (failed: 0 would then mislead readers).
+  assert.deepEqual(failedChecks(empty.checks), ["directory.non_empty"]);
+  assert.ok(empty.failures.length >= 1, `expected >= 1 failure for an empty directory, got ${empty.failures.length}`);
   const missing = validatePolicyDirectory(`${root}does-not-exist`);
   assert.equal(missing.passed, false);
   assert.deepEqual(failedChecks(missing.checks), ["directory.readable"]);
@@ -115,4 +119,8 @@ test("CLI validate exits 0 on repository policies and 1 on the invalid fixture s
 
   const empty = spawnSync(process.execPath, [cli, "validate", emptyDir], { encoding: "utf8" });
   assert.equal(empty.status, 1, empty.stdout + empty.stderr);
+  const emptyReport = JSON.parse(empty.stdout) as { failed: number; passed: boolean; failures: { check: string }[] };
+  assert.equal(emptyReport.passed, false);
+  assert.ok(emptyReport.failed >= 1, `expected failed >= 1 for an empty directory, got ${emptyReport.failed}`);
+  assert.ok(emptyReport.failures.some((item) => item.check === "directory.non_empty"), "expected a directory.non_empty failure");
 });
